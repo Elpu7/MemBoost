@@ -24,7 +24,7 @@ public final class MemBoostConfigScreen extends Screen {
 
         int buttonWidth = 220;
         int buttonX = (this.width - buttonWidth) / 2;
-        int y = this.height / 4;
+        int y = this.height / 4 + 36;
 
         this.addRenderableWidget(Button.builder(profileMessage(), button -> {
             config().cycleProfile();
@@ -84,7 +84,8 @@ public final class MemBoostConfigScreen extends Screen {
         drawCenteredString(graphics, "Current: " + snapshot.usedMiB() + " / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)", centerX, infoY + 14, 0xFFFFFFFF);
         drawCenteredString(graphics, "Committed: " + snapshot.committedMiB() + " MiB | Peak: " + snapshot.peakUsedMiB() + " MiB", centerX, infoY + 28, 0xFFB8C0CC);
         drawCenteredString(graphics, "Samples: " + snapshot.sampleCount() + " | Chunks: " + cleanup.loadedChunks(), centerX, infoY + 42, 0xFFB8C0CC);
-        drawCenteredString(graphics, "Cleanups: " + cleanup.totalCleanupCount() + " | Last: " + cleanup.describeLastCleanup(), centerX, infoY + 56, 0xFFB8C0CC);
+        drawCenteredString(graphics, "Chunk radius: " + cleanup.activeChunkRadius() + " / " + cleanup.serverChunkRadius() + " | Pressure: " + cleanup.chunkPressureActivationCount(), centerX, infoY + 56, 0xFFB8C0CC);
+        drawCenteredString(graphics, "Cleanups: " + cleanup.totalCleanupCount() + " | Last: " + cleanup.describeLastCleanup(), centerX, infoY + 70, 0xFFB8C0CC);
     }
 
     private void drawCenteredString(GuiGraphicsExtractor graphics, String text, int centerX, int y, int color) {

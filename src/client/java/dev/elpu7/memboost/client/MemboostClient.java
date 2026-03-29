@@ -75,4 +75,12 @@ public class MemboostClient implements ClientModInitializer {
 
         cleanupCoordinator.onWorldChanged(Minecraft.getInstance(), previousLevel, newLevel, metricsTracker);
     }
+
+    public static void handleServerChunkRadius(int radius) {
+        if (cleanupCoordinator == null) {
+            return;
+        }
+
+        cleanupCoordinator.updateServerChunkRadius(Minecraft.getInstance(), radius);
+    }
 }

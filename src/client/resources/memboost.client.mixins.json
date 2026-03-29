@@ -4,6 +4,7 @@
   "package": "dev.elpu7.memboost.mixin.client",
   "compatibilityLevel": "JAVA_22",
   "client": [
+    "ClientPacketListenerMixin",
     "MinecraftLevelTransitionMixin"
   ],
   "injectors": {

@@ -8,7 +8,10 @@ public record CleanupStatsSnapshot(
         long particleClearCount,
         long lastCleanupEpochMillis,
         String lastCleanupReason,
-        int loadedChunks
+        int loadedChunks,
+        int serverChunkRadius,
+        int activeChunkRadius,
+        long chunkPressureActivationCount
 ) {
 
     public long totalCleanupCount() {

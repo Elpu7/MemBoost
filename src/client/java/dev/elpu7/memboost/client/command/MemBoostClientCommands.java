@@ -65,6 +65,7 @@ public final class MemBoostClientCommands {
         source.sendFeedback(Component.literal("Committed: " + snapshot.committedMiB() + " MiB | Peak: " + snapshot.peakUsedMiB() + " MiB"));
         source.sendFeedback(Component.literal("Samples: " + snapshot.sampleCount() + " | Chunks: " + cleanup.loadedChunks() + " | HUD: " + (config.isHudEnabled() ? "on" : "off")));
         source.sendFeedback(Component.literal("Profile: " + config.getProfile().getDisplayName() + " | Interval: " + config.getSampleIntervalTicks() + " ticks | Alert: " + config.getWarningThresholdPercent() + "%"));
+        source.sendFeedback(Component.literal("Chunk radius: active " + cleanup.activeChunkRadius() + " / server " + cleanup.serverChunkRadius() + " | Pressure activations: " + cleanup.chunkPressureActivationCount()));
         source.sendFeedback(Component.literal("Cleanups: " + cleanup.totalCleanupCount() + " (pressure " + cleanup.pressureCleanupCount() + ", world " + cleanup.worldChangeCleanupCount() + ", disconnect " + cleanup.disconnectCleanupCount() + ")"));
         source.sendFeedback(Component.literal("Resources freed: maps " + cleanup.mapTextureResetCount() + ", particles " + cleanup.particleClearCount() + " | Last: " + cleanup.describeLastCleanup()));
         return snapshot.usagePercent();

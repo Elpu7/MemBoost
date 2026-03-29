@@ -34,6 +34,7 @@ public final class MemBoostHud {
         List<String> lines = List.of(
                 "MemBoost " + snapshot.usedMiB() + " / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)",
                 "Peak " + snapshot.peakUsedMiB() + " MiB | Chunks " + cleanup.loadedChunks(),
+                "Radius " + cleanup.activeChunkRadius() + " / " + cleanup.serverChunkRadius() + " | Chunk pressure " + cleanup.chunkPressureActivationCount(),
                 "Cleanups " + cleanup.totalCleanupCount() + " | Last " + cleanup.describeLastCleanup(),
                 "Profile " + config.getProfile().getDisplayName() + " | Alert " + config.getWarningThresholdPercent() + "%"
         );

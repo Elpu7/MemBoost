@@ -5,7 +5,11 @@
   "name": "MemBoost",
   "description": "MemBoost optimizes memory and boosts performance",
   "authors": ["Elpu7"],
-  "contact": {},
+  "contact": {
+    "homepage": "https://modrinth.com/project/memboost",
+    "issues": "https://github.com/Elpu7/Memboost/issues",
+    "sources": "https://github.com/Elpu7/Memboost"
+  },
   "license": "MIT",
   "icon": "assets/memboost/icon.png",
   "environment": "client",
