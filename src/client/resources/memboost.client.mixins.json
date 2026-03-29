@@ -2,8 +2,10 @@
   "required": true,
   "minVersion": "0.8",
   "package": "dev.elpu7.memboost.mixin.client",
-  "compatibilityLevel": "JAVA_25",
-  "client": [],
+  "compatibilityLevel": "JAVA_22",
+  "client": [
+    "MinecraftLevelTransitionMixin"
+  ],
   "injectors": {
     "defaultRequire": 1
   },

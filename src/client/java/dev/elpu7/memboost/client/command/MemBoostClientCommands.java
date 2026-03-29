@@ -4,9 +4,11 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import dev.elpu7.memboost.client.MemboostClient;
 import dev.elpu7.memboost.client.MemoryMetricsSnapshot;
+import dev.elpu7.memboost.client.cleanup.CleanupStatsSnapshot;
 import dev.elpu7.memboost.config.MemBoostConfig;
 import dev.elpu7.memboost.config.OptimizationProfile;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
+import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.network.chat.Component;
 
@@ -56,12 +58,15 @@ public final class MemBoostClientCommands {
 
         MemoryMetricsSnapshot snapshot = MemboostClient.getMetricsTracker().snapshot();
         MemBoostConfig config = MemboostClient.getConfigManager().getConfig();
+        CleanupStatsSnapshot cleanup = MemboostClient.getCleanupCoordinator().snapshot(Minecraft.getInstance());
 
         source.sendFeedback(Component.literal("MemBoost stats"));
         source.sendFeedback(Component.literal("Used: " + snapshot.usedMiB() + " MiB / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)"));
         source.sendFeedback(Component.literal("Committed: " + snapshot.committedMiB() + " MiB | Peak: " + snapshot.peakUsedMiB() + " MiB"));
-        source.sendFeedback(Component.literal("Samples: " + snapshot.sampleCount() + " | HUD: " + (config.isHudEnabled() ? "on" : "off")));
+        source.sendFeedback(Component.literal("Samples: " + snapshot.sampleCount() + " | Chunks: " + cleanup.loadedChunks() + " | HUD: " + (config.isHudEnabled() ? "on" : "off")));
         source.sendFeedback(Component.literal("Profile: " + config.getProfile().getDisplayName() + " | Interval: " + config.getSampleIntervalTicks() + " ticks | Alert: " + config.getWarningThresholdPercent() + "%"));
+        source.sendFeedback(Component.literal("Cleanups: " + cleanup.totalCleanupCount() + " (pressure " + cleanup.pressureCleanupCount() + ", world " + cleanup.worldChangeCleanupCount() + ", disconnect " + cleanup.disconnectCleanupCount() + ")"));
+        source.sendFeedback(Component.literal("Resources freed: maps " + cleanup.mapTextureResetCount() + ", particles " + cleanup.particleClearCount() + " | Last: " + cleanup.describeLastCleanup()));
         return snapshot.usagePercent();
     }
 

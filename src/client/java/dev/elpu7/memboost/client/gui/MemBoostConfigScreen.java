@@ -2,6 +2,7 @@ package dev.elpu7.memboost.client.gui;
 
 import dev.elpu7.memboost.client.MemboostClient;
 import dev.elpu7.memboost.client.MemoryMetricsSnapshot;
+import dev.elpu7.memboost.client.cleanup.CleanupStatsSnapshot;
 import dev.elpu7.memboost.config.MemBoostConfig;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -75,13 +76,15 @@ public final class MemBoostConfigScreen extends Screen {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
 
         MemoryMetricsSnapshot snapshot = MemboostClient.getMetricsTracker().snapshot();
+        CleanupStatsSnapshot cleanup = MemboostClient.getCleanupCoordinator().snapshot(this.minecraft);
         int centerX = this.width / 2;
         int infoY = 24;
 
         drawCenteredString(graphics, this.title.getString(), centerX, infoY, 0xFFFFFFFF);
         drawCenteredString(graphics, "Current: " + snapshot.usedMiB() + " / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)", centerX, infoY + 14, 0xFFFFFFFF);
         drawCenteredString(graphics, "Committed: " + snapshot.committedMiB() + " MiB | Peak: " + snapshot.peakUsedMiB() + " MiB", centerX, infoY + 28, 0xFFB8C0CC);
-        drawCenteredString(graphics, "Samples: " + snapshot.sampleCount(), centerX, infoY + 42, 0xFFB8C0CC);
+        drawCenteredString(graphics, "Samples: " + snapshot.sampleCount() + " | Chunks: " + cleanup.loadedChunks(), centerX, infoY + 42, 0xFFB8C0CC);
+        drawCenteredString(graphics, "Cleanups: " + cleanup.totalCleanupCount() + " | Last: " + cleanup.describeLastCleanup(), centerX, infoY + 56, 0xFFB8C0CC);
     }
 
     private void drawCenteredString(GuiGraphicsExtractor graphics, String text, int centerX, int y, int color) {

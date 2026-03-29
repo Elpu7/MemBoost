@@ -4,6 +4,7 @@ import java.util.List;
 
 import dev.elpu7.memboost.client.MemboostClient;
 import dev.elpu7.memboost.client.MemoryMetricsSnapshot;
+import dev.elpu7.memboost.client.cleanup.CleanupStatsSnapshot;
 import dev.elpu7.memboost.config.MemBoostConfig;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -29,9 +30,11 @@ public final class MemBoostHud {
 
         Minecraft client = Minecraft.getInstance();
         MemoryMetricsSnapshot snapshot = MemboostClient.getMetricsTracker().snapshot();
+        CleanupStatsSnapshot cleanup = MemboostClient.getCleanupCoordinator().snapshot(client);
         List<String> lines = List.of(
                 "MemBoost " + snapshot.usedMiB() + " / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)",
-                "Peak " + snapshot.peakUsedMiB() + " MiB | Samples " + snapshot.sampleCount(),
+                "Peak " + snapshot.peakUsedMiB() + " MiB | Chunks " + cleanup.loadedChunks(),
+                "Cleanups " + cleanup.totalCleanupCount() + " | Last " + cleanup.describeLastCleanup(),
                 "Profile " + config.getProfile().getDisplayName() + " | Alert " + config.getWarningThresholdPercent() + "%"
         );
 
