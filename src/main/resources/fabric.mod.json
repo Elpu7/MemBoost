@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "memboost",
+  "version": "${version}",
+  "name": "MemBoost",
+  "description": "MemBoost optimizes memory and boosts performance",
+  "authors": ["Elpu7"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/memboost/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "dev.elpu7.memboost.client.MemboostClient"
+    ],
+    "main": [
+      "dev.elpu7.memboost.Memboost"
+    ],
+    "modmenu": [
+      "dev.elpu7.memboost.client.integration.MemBoostModMenuApi"
+    ]
+  },
+  "mixins": [
+    "memboost.mixins.json",
+    {
+      "config": "memboost.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
