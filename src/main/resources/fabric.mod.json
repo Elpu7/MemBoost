@@ -3,7 +3,7 @@
   "id": "memboost",
   "version": "${version}",
   "name": "MemBoost",
-  "description": "Client-side memory diagnostics and cleanup utilities for Fabric 26.1",
+  "description": "Client-side mod that monitors memory usage and reduces RAM pressure during gameplay.",
   "authors": ["Elpu7"],
   "contact": {
     "homepage": "https://modrinth.com/project/memboost",
