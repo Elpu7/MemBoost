@@ -3,7 +3,7 @@
   "id": "memboost",
   "version": "${version}",
   "name": "MemBoost",
-  "description": "MemBoost optimizes memory and boosts performance",
+  "description": "Client-side memory diagnostics and cleanup utilities for Fabric 26.1",
   "authors": ["Elpu7"],
   "contact": {
     "homepage": "https://modrinth.com/project/memboost",

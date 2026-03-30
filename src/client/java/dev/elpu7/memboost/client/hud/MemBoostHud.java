@@ -5,6 +5,7 @@ import java.util.List;
 import dev.elpu7.memboost.client.MemboostClient;
 import dev.elpu7.memboost.client.MemoryMetricsSnapshot;
 import dev.elpu7.memboost.client.cleanup.CleanupStatsSnapshot;
+import dev.elpu7.memboost.client.network.PacketStatsSnapshot;
 import dev.elpu7.memboost.config.MemBoostConfig;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -31,12 +32,17 @@ public final class MemBoostHud {
         Minecraft client = Minecraft.getInstance();
         MemoryMetricsSnapshot snapshot = MemboostClient.getMetricsTracker().snapshot();
         CleanupStatsSnapshot cleanup = MemboostClient.getCleanupCoordinator().snapshot(client);
+        PacketStatsSnapshot packetStats = MemboostClient.getPacketBurstMonitor().snapshot();
+        int effectiveThreshold = MemboostClient.getCleanupCoordinator().effectiveWarningThreshold(client, config);
         List<String> lines = List.of(
                 "MemBoost " + snapshot.usedMiB() + " / " + snapshot.maxMiB() + " MiB (" + snapshot.usagePercent() + "%)",
                 "Peak " + snapshot.peakUsedMiB() + " MiB | Chunks " + cleanup.loadedChunks(),
                 "Radius " + cleanup.activeChunkRadius() + " / " + cleanup.serverChunkRadius() + " | Chunk pressure " + cleanup.chunkPressureActivationCount(),
-                "Cleanups " + cleanup.totalCleanupCount() + " | Last " + cleanup.describeLastCleanup(),
-                "Profile " + config.getProfile().getDisplayName() + " | Alert " + config.getWarningThresholdPercent() + "%"
+                "Packets " + packetStats.recentChunkPackets() + "/" + packetStats.recentLightPackets() + "/" + packetStats.recentForgetPackets() + " | Burst " + cleanup.packetBurstCleanupCount(),
+                "Freed maps " + cleanup.mapTextureResetCount() + " | particles " + cleanup.particleClearCount() + " | transient " + cleanup.transientStateResetCount(),
+                "Cleanups " + cleanup.totalCleanupCount() + " | Reloads " + cleanup.resourceReloadCleanupCount() + " | Last " + cleanup.describeLastCleanup(),
+                "Preset " + config.getLastPreset().getDisplayName() + " | Profile " + config.getProfile().getDisplayName(),
+                "Alert " + config.getWarningThresholdPercent() + "% -> " + effectiveThreshold + "%"
         );
 
         int x = 8;

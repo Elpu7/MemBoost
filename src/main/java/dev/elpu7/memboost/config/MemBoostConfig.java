@@ -7,8 +7,10 @@ public final class MemBoostConfig {
 
     private OptimizationProfile profile = OptimizationProfile.BALANCED;
     private boolean hudEnabled = false;
+    private boolean debugLoggingEnabled = false;
     private int sampleIntervalTicks = 20;
     private int warningThresholdPercent = 80;
+    private String lastPreset = MemBoostPreset.PLAY.getId();
 
     public OptimizationProfile getProfile() {
         return this.profile;
@@ -24,6 +26,14 @@ public final class MemBoostConfig {
 
     public void setHudEnabled(boolean hudEnabled) {
         this.hudEnabled = hudEnabled;
+    }
+
+    public boolean isDebugLoggingEnabled() {
+        return this.debugLoggingEnabled;
+    }
+
+    public void setDebugLoggingEnabled(boolean debugLoggingEnabled) {
+        this.debugLoggingEnabled = debugLoggingEnabled;
     }
 
     public int getSampleIntervalTicks() {
@@ -42,6 +52,39 @@ public final class MemBoostConfig {
         this.warningThresholdPercent = clamp(warningThresholdPercent, 50, 95);
     }
 
+    public MemBoostPreset getLastPreset() {
+        return MemBoostPreset.fromId(this.lastPreset);
+    }
+
+    public void applyPreset(MemBoostPreset preset) {
+        MemBoostPreset safePreset = preset == null ? MemBoostPreset.PLAY : preset;
+        this.lastPreset = safePreset.getId();
+
+        switch (safePreset) {
+            case PLAY -> {
+                setProfile(OptimizationProfile.BALANCED);
+                setHudEnabled(false);
+                setDebugLoggingEnabled(false);
+                setSampleIntervalTicks(20);
+                setWarningThresholdPercent(85);
+            }
+            case OBSERVE -> {
+                setProfile(OptimizationProfile.BALANCED);
+                setHudEnabled(true);
+                setDebugLoggingEnabled(true);
+                setSampleIntervalTicks(10);
+                setWarningThresholdPercent(80);
+            }
+            case STRESS -> {
+                setProfile(OptimizationProfile.AGGRESSIVE);
+                setHudEnabled(true);
+                setDebugLoggingEnabled(true);
+                setSampleIntervalTicks(5);
+                setWarningThresholdPercent(70);
+            }
+        }
+    }
+
     public void cycleProfile() {
         this.profile = this.profile.next();
     }
@@ -58,6 +101,7 @@ public final class MemBoostConfig {
         setProfile(this.profile);
         setSampleIntervalTicks(this.sampleIntervalTicks);
         setWarningThresholdPercent(this.warningThresholdPercent);
+        this.lastPreset = getLastPreset().getId();
     }
 
     private static int nextOption(int currentValue, int[] options) {

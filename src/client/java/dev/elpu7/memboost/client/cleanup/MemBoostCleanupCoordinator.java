@@ -3,6 +3,8 @@ package dev.elpu7.memboost.client.cleanup;
 import dev.elpu7.memboost.Memboost;
 import dev.elpu7.memboost.client.MemoryMetricsSnapshot;
 import dev.elpu7.memboost.client.MemoryMetricsTracker;
+import dev.elpu7.memboost.client.network.PacketBurstMonitor;
+import dev.elpu7.memboost.client.network.PacketStatsSnapshot;
 import dev.elpu7.memboost.config.MemBoostConfig;
 import dev.elpu7.memboost.config.OptimizationProfile;
 import net.minecraft.client.Minecraft;
@@ -17,16 +19,24 @@ public final class MemBoostCleanupCoordinator {
     private long pressureCleanupCount;
     private long worldChangeCleanupCount;
     private long disconnectCleanupCount;
+    private long resourceReloadCleanupCount;
     private long mapTextureResetCount;
     private long particleClearCount;
+    private long transientStateResetCount;
     private long chunkPressureActivationCount;
+    private long packetBurstCleanupCount;
     private long lastCleanupEpochMillis;
     private long lastPressureCleanupEpochMillis;
     private String lastCleanupReason = "none";
     private int serverChunkRadius = -1;
     private int activeChunkRadius = -1;
+    private int lastSuggestedChunkRadius = -1;
 
-    public void tick(Minecraft client, MemBoostConfig config, MemoryMetricsTracker metricsTracker) {
+    public int effectiveWarningThreshold(Minecraft client, MemBoostConfig config) {
+        return effectiveWarningThresholdPercent(client, config);
+    }
+
+    public void tick(Minecraft client, MemBoostConfig config, MemoryMetricsTracker metricsTracker, PacketBurstMonitor packetBurstMonitor) {
         OptimizationProfile profile = config.getProfile();
         updateChunkPressureMode(client, config, metricsTracker.snapshot());
 
@@ -35,15 +45,19 @@ public final class MemBoostCleanupCoordinator {
         }
 
         MemoryMetricsSnapshot snapshot = metricsTracker.snapshot();
+        PacketStatsSnapshot packetStats = packetBurstMonitor.snapshot();
 
-        if (snapshot.usagePercent() < config.getWarningThresholdPercent()) {
+        if (handlePacketBurstPressure(client, config, metricsTracker, packetBurstMonitor, snapshot, packetStats)) {
+            return;
+        }
+
+        int warningThreshold = effectiveWarningThresholdPercent(client, config);
+        if (snapshot.usagePercent() < warningThreshold) {
             return;
         }
 
         long now = System.currentTimeMillis();
-        long cooldownMs = profile == OptimizationProfile.AGGRESSIVE
-                ? AGGRESSIVE_PRESSURE_COOLDOWN_MS
-                : BALANCED_PRESSURE_COOLDOWN_MS;
+        long cooldownMs = pressureCooldownMillis(client, profile);
 
         if (now - this.lastPressureCleanupEpochMillis < cooldownMs) {
             return;
@@ -52,8 +66,7 @@ public final class MemBoostCleanupCoordinator {
         boolean mapsReset = resetMapTextures(client);
         boolean particlesCleared = false;
 
-        if (profile == OptimizationProfile.AGGRESSIVE
-                || snapshot.usagePercent() >= Math.min(95, config.getWarningThresholdPercent() + 10)) {
+        if (shouldClearParticlesForPressure(client, config, snapshot.usagePercent(), warningThreshold)) {
             client.particleEngine.clearParticles();
             this.particleClearCount++;
             particlesCleared = true;
@@ -68,50 +81,53 @@ public final class MemBoostCleanupCoordinator {
         updateLastCleanup(now, particlesCleared ? "memory pressure: maps + particles" : "memory pressure: maps");
         metricsTracker.sampleNow();
 
-        Memboost.LOGGER.info(
-                "[MemBoost] Pressure cleanup ran at {}% heap usage with profile {}.",
+        debugLog(config, "[MemBoost] Pressure cleanup ran at {}% heap usage with profile {} (effective threshold {}%).",
                 snapshot.usagePercent(),
-                profile.getId()
-        );
+                profile.getId(),
+                warningThreshold);
     }
 
-    public void onWorldChanged(Minecraft client, ClientLevel previousLevel, ClientLevel newLevel, MemoryMetricsTracker metricsTracker) {
+    public void onWorldChanged(Minecraft client, ClientLevel previousLevel, ClientLevel newLevel, MemoryMetricsTracker metricsTracker, PacketBurstMonitor packetBurstMonitor) {
         if (previousLevel == null || previousLevel == newLevel) {
             return;
         }
 
         resetMapTextures(client);
+        resetTransientClientState(client, packetBurstMonitor);
         this.worldChangeCleanupCount++;
 
         String reason = newLevel != null && previousLevel.dimension() != newLevel.dimension()
                 ? "dimension change"
                 : "world reload";
         updateLastCleanup(System.currentTimeMillis(), reason);
-        if (newLevel != null && this.serverChunkRadius > 0) {
-            applyChunkRadius(newLevel, this.serverChunkRadius);
-        }
+        this.activeChunkRadius = this.serverChunkRadius;
+        this.lastSuggestedChunkRadius = -1;
         metricsTracker.sampleNow();
     }
 
-    public void onDisconnect(Minecraft client, MemoryMetricsTracker metricsTracker) {
+    public void onDisconnect(Minecraft client, MemoryMetricsTracker metricsTracker, PacketBurstMonitor packetBurstMonitor) {
         resetMapTextures(client);
+        resetTransientClientState(client, packetBurstMonitor);
         this.disconnectCleanupCount++;
         updateLastCleanup(System.currentTimeMillis(), "disconnect");
         this.activeChunkRadius = -1;
+        this.lastSuggestedChunkRadius = -1;
         metricsTracker.sampleNow();
+    }
+
+    public void onResourceReload(Minecraft client, MemBoostConfig config, MemoryMetricsTracker metricsTracker, PacketBurstMonitor packetBurstMonitor) {
+        resetMapTextures(client);
+        resetTransientClientState(client, packetBurstMonitor);
+        this.resourceReloadCleanupCount++;
+        updateLastCleanup(System.currentTimeMillis(), "resource reload");
+        metricsTracker.sampleNow();
+        debugLog(config, "[MemBoost] Ran resource reload cleanup.");
     }
 
     public void updateServerChunkRadius(Minecraft client, int radius) {
         this.serverChunkRadius = Math.max(MIN_CHUNK_RADIUS, radius);
-
-        if (client.level == null) {
-            this.activeChunkRadius = this.serverChunkRadius;
-            return;
-        }
-
-        if (this.activeChunkRadius < 0 || this.activeChunkRadius >= this.serverChunkRadius) {
-            applyChunkRadius(client.level, this.serverChunkRadius);
-        }
+        this.activeChunkRadius = this.serverChunkRadius;
+        this.lastSuggestedChunkRadius = -1;
     }
 
     public CleanupStatsSnapshot snapshot(Minecraft client) {
@@ -119,14 +135,17 @@ public final class MemBoostCleanupCoordinator {
                 this.pressureCleanupCount,
                 this.worldChangeCleanupCount,
                 this.disconnectCleanupCount,
+                this.resourceReloadCleanupCount,
                 this.mapTextureResetCount,
                 this.particleClearCount,
+                this.transientStateResetCount,
                 this.lastCleanupEpochMillis,
                 this.lastCleanupReason,
                 loadedChunks(client),
                 this.serverChunkRadius,
                 this.activeChunkRadius,
-                this.chunkPressureActivationCount
+                this.chunkPressureActivationCount,
+                this.packetBurstCleanupCount
         );
     }
 
@@ -134,6 +153,17 @@ public final class MemBoostCleanupCoordinator {
         client.getMapTextureManager().resetData();
         this.mapTextureResetCount++;
         return true;
+    }
+
+    private void resetTransientClientState(Minecraft client, PacketBurstMonitor packetBurstMonitor) {
+        packetBurstMonitor.resetWindow();
+
+        if (client.particleEngine != null) {
+            client.particleEngine.clearParticles();
+            this.particleClearCount++;
+        }
+
+        this.transientStateResetCount++;
     }
 
     private void updateLastCleanup(long epochMillis, String reason) {
@@ -146,60 +176,185 @@ public final class MemBoostCleanupCoordinator {
             return;
         }
 
+        this.activeChunkRadius = this.serverChunkRadius;
+
         OptimizationProfile profile = config.getProfile();
 
         if (profile == OptimizationProfile.SAFE) {
-            restoreChunkRadius(client.level);
             return;
         }
 
-        int threshold = config.getWarningThresholdPercent();
+        int threshold = effectiveWarningThresholdPercent(client, config);
         int usage = snapshot.usagePercent();
 
-        if (usage >= threshold) {
-            int reduction = profile == OptimizationProfile.AGGRESSIVE ? 4 : 2;
-
-            if (usage >= Math.min(95, threshold + 10)) {
-                reduction += profile == OptimizationProfile.AGGRESSIVE ? 2 : 1;
-            }
-
-            int targetRadius = Math.max(MIN_CHUNK_RADIUS, this.serverChunkRadius - reduction);
-
-            if (targetRadius < this.serverChunkRadius && targetRadius != this.activeChunkRadius) {
-                applyChunkRadius(client.level, targetRadius);
-                this.chunkPressureActivationCount++;
-                updateLastCleanup(System.currentTimeMillis(), "chunk pressure mode");
-                Memboost.LOGGER.info(
-                        "[MemBoost] Chunk pressure mode lowered client chunk radius from {} to {} at {}% heap usage.",
-                        this.serverChunkRadius,
-                        targetRadius,
-                        usage
-                );
-            }
+        if (usage < threshold) {
+            this.lastSuggestedChunkRadius = -1;
             return;
         }
 
-        if (usage <= Math.max(35, threshold - 10)) {
-            restoreChunkRadius(client.level);
-        }
-    }
+        int reduction = profile == OptimizationProfile.AGGRESSIVE ? 4 : 2;
 
-    private void restoreChunkRadius(ClientLevel level) {
-        if (this.serverChunkRadius < 0) {
+        if (usage >= Math.min(95, threshold + 10)) {
+            reduction += profile == OptimizationProfile.AGGRESSIVE ? 2 : 1;
+        }
+
+        int suggestedRadius = Math.max(MIN_CHUNK_RADIUS, this.serverChunkRadius - reduction);
+
+        if (suggestedRadius >= this.serverChunkRadius) {
+            this.lastSuggestedChunkRadius = -1;
             return;
         }
 
-        if (this.activeChunkRadius != this.serverChunkRadius) {
-            applyChunkRadius(level, this.serverChunkRadius);
+        if (suggestedRadius != this.lastSuggestedChunkRadius) {
+            this.lastSuggestedChunkRadius = suggestedRadius;
+            this.chunkPressureActivationCount++;
+            debugLog(config,
+                    "[MemBoost] Chunk pressure mode detected pressure at {}% heap usage. Suggested radius {} from server radius {}.",
+                    usage,
+                    suggestedRadius,
+                    this.serverChunkRadius
+            );
         }
     }
 
-    private void applyChunkRadius(ClientLevel level, int radius) {
-        level.getChunkSource().updateViewRadius(radius);
-        this.activeChunkRadius = radius;
+    private boolean handlePacketBurstPressure(
+            Minecraft client,
+            MemBoostConfig config,
+            MemoryMetricsTracker metricsTracker,
+            PacketBurstMonitor packetBurstMonitor,
+            MemoryMetricsSnapshot snapshot,
+            PacketStatsSnapshot packetStats
+    ) {
+        if (client.level == null) {
+            return false;
+        }
+
+        int warningThreshold = effectiveWarningThresholdPercent(client, config);
+        if (snapshot.usagePercent() < Math.max(55, warningThreshold - 3)) {
+            return false;
+        }
+
+        boolean integratedServer = isIntegratedServer(client);
+        boolean chunkBurst = packetStats.recentChunkPackets() >= packetChunkBurstThreshold(config.getProfile(), integratedServer);
+        boolean lightBurst = packetStats.recentLightPackets() >= packetLightBurstThreshold(config.getProfile(), integratedServer);
+        boolean unloadBurst = packetStats.recentForgetPackets() >= packetForgetBurstThreshold(config.getProfile(), integratedServer);
+
+        if (!chunkBurst && !lightBurst && !unloadBurst) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - this.lastPressureCleanupEpochMillis < packetBurstCooldownMillis(config.getProfile(), integratedServer)) {
+            return false;
+        }
+
+        resetMapTextures(client);
+
+        if (shouldClearParticlesForPacketBurst(client, config, snapshot.usagePercent(), warningThreshold, chunkBurst)) {
+            client.particleEngine.clearParticles();
+            this.particleClearCount++;
+        }
+
+        this.packetBurstCleanupCount++;
+        this.pressureCleanupCount++;
+        this.lastPressureCleanupEpochMillis = now;
+        packetBurstMonitor.markBurstActivation();
+        updateLastCleanup(now, "packet burst pressure");
+        metricsTracker.sampleNow();
+        debugLog(config,
+                "[MemBoost] Packet burst cleanup ran. recent chunk={}, light={}, forget={}.",
+                packetStats.recentChunkPackets(),
+                packetStats.recentLightPackets(),
+                packetStats.recentForgetPackets()
+        );
+        return true;
     }
 
     private int loadedChunks(Minecraft client) {
         return client.level == null ? 0 : client.level.getChunkSource().getLoadedChunksCount();
+    }
+
+    private boolean shouldClearParticlesForPressure(Minecraft client, MemBoostConfig config, int usagePercent, int warningThreshold) {
+        if (config.getProfile() == OptimizationProfile.SAFE) {
+            return false;
+        }
+
+        int particleThreshold = isIntegratedServer(client)
+                ? Math.min(98, warningThreshold + 12)
+                : Math.min(96, warningThreshold + (config.getProfile() == OptimizationProfile.AGGRESSIVE ? 6 : 10));
+        return usagePercent >= particleThreshold;
+    }
+
+    private boolean shouldClearParticlesForPacketBurst(Minecraft client, MemBoostConfig config, int usagePercent, int warningThreshold, boolean chunkBurst) {
+        if (config.getProfile() == OptimizationProfile.AGGRESSIVE) {
+            int particleThreshold = isIntegratedServer(client) ? Math.min(98, warningThreshold + 10) : Math.min(95, warningThreshold + 5);
+            return usagePercent >= particleThreshold;
+        }
+
+        return chunkBurst && usagePercent >= Math.min(98, warningThreshold + 8);
+    }
+
+    private int effectiveWarningThresholdPercent(Minecraft client, MemBoostConfig config) {
+        int threshold = config.getWarningThresholdPercent();
+        if (!isIntegratedServer(client)) {
+            return threshold;
+        }
+
+        return switch (config.getProfile()) {
+            case SAFE -> Math.min(95, threshold + 8);
+            case BALANCED -> Math.min(95, threshold + 6);
+            case AGGRESSIVE -> Math.min(95, threshold + 10);
+        };
+    }
+
+    private long pressureCooldownMillis(Minecraft client, OptimizationProfile profile) {
+        boolean integratedServer = isIntegratedServer(client);
+        return switch (profile) {
+            case SAFE -> Long.MAX_VALUE;
+            case BALANCED -> integratedServer ? 22_500L : BALANCED_PRESSURE_COOLDOWN_MS;
+            case AGGRESSIVE -> integratedServer ? 15_000L : AGGRESSIVE_PRESSURE_COOLDOWN_MS;
+        };
+    }
+
+    private long packetBurstCooldownMillis(OptimizationProfile profile, boolean integratedServer) {
+        return switch (profile) {
+            case SAFE -> Long.MAX_VALUE;
+            case BALANCED -> integratedServer ? 6_000L : 3_500L;
+            case AGGRESSIVE -> integratedServer ? 5_000L : 2_500L;
+        };
+    }
+
+    private int packetChunkBurstThreshold(OptimizationProfile profile, boolean integratedServer) {
+        return switch (profile) {
+            case SAFE -> Integer.MAX_VALUE;
+            case BALANCED -> integratedServer ? 40 : 20;
+            case AGGRESSIVE -> integratedServer ? 28 : 12;
+        };
+    }
+
+    private int packetLightBurstThreshold(OptimizationProfile profile, boolean integratedServer) {
+        return switch (profile) {
+            case SAFE -> Integer.MAX_VALUE;
+            case BALANCED -> integratedServer ? 64 : 36;
+            case AGGRESSIVE -> integratedServer ? 48 : 24;
+        };
+    }
+
+    private int packetForgetBurstThreshold(OptimizationProfile profile, boolean integratedServer) {
+        return switch (profile) {
+            case SAFE -> Integer.MAX_VALUE;
+            case BALANCED -> integratedServer ? 28 : 16;
+            case AGGRESSIVE -> integratedServer ? 20 : 12;
+        };
+    }
+
+    private boolean isIntegratedServer(Minecraft client) {
+        return client != null && client.getSingleplayerServer() != null;
+    }
+
+    private void debugLog(MemBoostConfig config, String message, Object... args) {
+        if (config.isDebugLoggingEnabled()) {
+            Memboost.LOGGER.info(message, args);
+        }
     }
 }

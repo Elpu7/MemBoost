@@ -7,6 +7,7 @@ import dev.elpu7.memboost.client.command.MemBoostClientCommands;
 import dev.elpu7.memboost.client.cleanup.MemBoostCleanupCoordinator;
 import dev.elpu7.memboost.client.gui.MemBoostConfigScreen;
 import dev.elpu7.memboost.client.hud.MemBoostHud;
+import dev.elpu7.memboost.client.network.PacketBurstMonitor;
 import dev.elpu7.memboost.config.MemBoostConfigManager;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -17,6 +18,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
 
@@ -25,6 +27,9 @@ public class MemboostClient implements ClientModInitializer {
     private static MemBoostConfigManager configManager;
     private static MemoryMetricsTracker metricsTracker;
     private static MemBoostCleanupCoordinator cleanupCoordinator;
+    private static PacketBurstMonitor packetBurstMonitor;
+    private static boolean pendingConfigOpen;
+    private static Screen pendingConfigParent;
 
     @Override
     public void onInitializeClient() {
@@ -34,13 +39,23 @@ public class MemboostClient implements ClientModInitializer {
         metricsTracker = new MemoryMetricsTracker();
         metricsTracker.sampleNow();
         cleanupCoordinator = new MemBoostCleanupCoordinator();
+        packetBurstMonitor = new PacketBurstMonitor();
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (pendingConfigOpen && client.screen == null) {
+                Screen parent = pendingConfigParent;
+                pendingConfigOpen = false;
+                pendingConfigParent = null;
+                client.setScreen(new MemBoostConfigScreen(parent));
+                return;
+            }
+
+            packetBurstMonitor.tick();
             metricsTracker.tick(configManager.getConfig());
-            cleanupCoordinator.tick(client, configManager.getConfig(), metricsTracker);
+            cleanupCoordinator.tick(client, configManager.getConfig(), metricsTracker, packetBurstMonitor);
         });
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> configManager.save());
-        ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> cleanupCoordinator.onDisconnect(client, metricsTracker));
+        ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> cleanupCoordinator.onDisconnect(client, metricsTracker, packetBurstMonitor));
         ClientCommandRegistrationCallback.EVENT.register(MemBoostClientCommands::register);
 
         HudElementRegistry.attachElementBefore(
@@ -64,8 +79,19 @@ public class MemboostClient implements ClientModInitializer {
         return Objects.requireNonNull(cleanupCoordinator, "MemBoost cleanup coordinator has not been initialized.");
     }
 
+    public static PacketBurstMonitor getPacketBurstMonitor() {
+        return Objects.requireNonNull(packetBurstMonitor, "MemBoost packet burst monitor has not been initialized.");
+    }
+
     public static void openConfigScreen(Screen parent) {
-        Minecraft.getInstance().setScreen(new MemBoostConfigScreen(parent));
+        Minecraft client = Minecraft.getInstance();
+        if (!(client.screen instanceof ChatScreen)) {
+            client.setScreen(new MemBoostConfigScreen(parent));
+            return;
+        }
+
+        pendingConfigOpen = true;
+        pendingConfigParent = parent;
     }
 
     public static void handleWorldChanged(ClientLevel previousLevel, ClientLevel newLevel) {
@@ -73,7 +99,15 @@ public class MemboostClient implements ClientModInitializer {
             return;
         }
 
-        cleanupCoordinator.onWorldChanged(Minecraft.getInstance(), previousLevel, newLevel, metricsTracker);
+        cleanupCoordinator.onWorldChanged(Minecraft.getInstance(), previousLevel, newLevel, metricsTracker, packetBurstMonitor);
+    }
+
+    public static void handleResourceReload() {
+        if (cleanupCoordinator == null || metricsTracker == null || configManager == null) {
+            return;
+        }
+
+        cleanupCoordinator.onResourceReload(Minecraft.getInstance(), configManager.getConfig(), metricsTracker, packetBurstMonitor);
     }
 
     public static void handleServerChunkRadius(int radius) {
@@ -82,5 +116,35 @@ public class MemboostClient implements ClientModInitializer {
         }
 
         cleanupCoordinator.updateServerChunkRadius(Minecraft.getInstance(), radius);
+    }
+
+    public static void recordChunkPacket() {
+        if (packetBurstMonitor != null) {
+            packetBurstMonitor.recordChunkPacket();
+        }
+    }
+
+    public static void recordLightPacket() {
+        if (packetBurstMonitor != null) {
+            packetBurstMonitor.recordLightPacket();
+        }
+    }
+
+    public static void recordForgetPacket() {
+        if (packetBurstMonitor != null) {
+            packetBurstMonitor.recordForgetPacket();
+        }
+    }
+
+    public static void recordChunkBatchStart() {
+        if (packetBurstMonitor != null) {
+            packetBurstMonitor.recordChunkBatchStart();
+        }
+    }
+
+    public static void recordChunkBatchFinish() {
+        if (packetBurstMonitor != null) {
+            packetBurstMonitor.recordChunkBatchFinish();
+        }
     }
 }
