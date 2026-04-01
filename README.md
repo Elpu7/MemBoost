@@ -1,6 +1,6 @@
 # MemBoost
 
-MemBoost is a client-side Fabric mod for Minecraft `26.1` focused on memory diagnostics and adaptive cleanup.
+MemBoost is a client-side Fabric mod for Minecraft `26.1.1` focused on memory diagnostics and adaptive cleanup.
 
 It helps you monitor heap usage, react to memory pressure, and apply lightweight client-side cleanup without needing to install anything on a server.
 
@@ -36,7 +36,7 @@ It helps you monitor heap usage, react to memory pressure, and apply lightweight
 
 ## Requirements
 
-- Minecraft `26.1`
+- Minecraft `26.1.1`
 - Fabric Loader
 - Fabric API
 
