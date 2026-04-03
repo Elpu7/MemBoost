@@ -1,17 +1,17 @@
-# MemBoost
+MemBoost is a client-side Fabric mod for Minecraft `26.1.1`.
 
-MemBoost is a client-side Fabric mod for Minecraft `26.1.1` focused on memory diagnostics and adaptive cleanup.
+It adds in-game memory stats, a config screen, presets, and a few client-side cleanup actions that can run when memory usage gets high.
 
-It helps you monitor heap usage, react to memory pressure, and apply lightweight client-side cleanup without needing to install anything on a server.
+MemBoost is a monitoring and cleanup utility. It does not change server-side memory handling, and results depend on your settings, world, and mod setup.
 
 ## Features
 
-- Live memory HUD with heap usage, chunk count, packet activity, and cleanup stats
+- Memory HUD with heap usage, chunk count, packet activity, and cleanup stats
 - Config screen with Mod Menu integration
 - Presets for `Play`, `Observe`, and `Stress`
-- Memory pressure cleanup for transient client-side state
-- World change, disconnect, and resource reload cleanup
-- Adaptive memory controls for render distance, simulation distance, and particle level
+- Cleanup during world change, disconnect, and resource reload
+- Configurable cleanup when memory usage gets high
+- Optional temporary changes to render distance, simulation distance, and particle level
 - Client-side commands for stats, presets, HUD, debug logging, and config access
 - Client-side only
 
@@ -39,6 +39,34 @@ It helps you monitor heap usage, react to memory pressure, and apply lightweight
 - Minecraft `26.1.1`
 - Fabric Loader
 - Fabric API
+
+## Example Test
+
+Test setup:
+
+- Minecraft `26.1.1`
+- Java `25`
+- CPU: `AMD Ryzen 7 9700X`
+- GPU: `Nvidia RTX 3060 Ti`
+- RAM: `32 GB DDR5`
+- JVM args: `-Xms256M -Xmx2048M`
+- Render distance: `16`
+- Simulation distance: `16`
+- Test case: `Loaded a singleplayer world and flew 3000 blocks south`
+
+Results from that setup:
+
+### Sodium only
+
+- Peak heap: `1702 MiB`
+
+### Sodium + MemBoost
+
+- Peak heap: `1579 MiB`
+- Cleanup count: `12`
+- MemBoost preset: `Stress`
+
+These numbers are from one local test setup and are provided as example results, not as guaranteed results for every world, server, or modpack.
 
 ## Notes
 

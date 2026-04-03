@@ -3,7 +3,7 @@
   "id": "memboost",
   "version": "${version}",
   "name": "MemBoost",
-  "description": "Client-side mod that monitors memory usage and reduces RAM pressure during gameplay.",
+  "description": "Client-side mod for memory monitoring and configurable cleanup tools.",
   "authors": ["Elpu7"],
   "contact": {
     "homepage": "https://modrinth.com/project/memboost",
